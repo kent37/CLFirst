@@ -1,0 +1,9 @@
+Data sources:
+
+Businesses Open_Closed in Cambridge.xlsx
+- City of Cambridge (COVID-19 response)
+- https://app.smartsheet.com/b/publish?EQBCT=1ee01731e6654ed68cd4c083de72b707
+
+Retail_Vacant_Storefronts_April_2020.csv 
+- Cambridge Open Data 
+- https://data.cambridgema.gov/Economic-Development/Retail-Vacant-Storefronts-April-2020/exmr-dxma

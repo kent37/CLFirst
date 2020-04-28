@@ -1,0 +1,99 @@
+---
+title: "Cambridge retail vacancies"
+author: ""
+date: '`r Sys.Date()`'
+output: kjutil::small_format
+---
+
+```{r parameters, echo=FALSE,include=FALSE,message=FALSE}
+knitr::opts_chunk$set(echo=FALSE,fig.width=10, fig.height=8, comment=NA, warning=FALSE, message=FALSE)
+```
+
+# Retail vacancies
+
+An exploration of vacant retail storefronts in Cambridge in April, 2020.
+
+
+```{r setup}
+library(tidyverse)
+library(DataExplorer)
+library(gt)
+library(leaflet)
+library(sf)
+```
+
+```{r data}
+df_raw = read_csv(here::here('data/Retail_Vacant_Storefronts_April_2020.csv')) %>% 
+  st_as_sf(wkt='Coordinates for Mapping', crs=4326)
+df = df_raw %>% 
+  mutate(`New Space`=`Former Tenant`=='New Space',
+         `Length of Vacancy`=ordered(`Length of Vacancy`, 
+            levels=c("Less than 6 months", "6-10 months", "1-2 years", "2 years or more")))
+```
+
+The Cambridge data set includes `r nrow(df)` properties in
+`r n_distinct(df[['Commercial District']])` commercial districts.
+
+## Distribution of categorical variables
+
+```{r barchart}
+df_explore = df %>% 
+  st_drop_geometry() %>% 
+  select(-(Address:`Zip Code`),
+         -(`Former Tenant`:`Police Response Districts`), -(`Leasing Contact`:`Census Blocks 2010`))
+
+plot_bar(df_explore, ggtheme=silgelib::theme_plex())
+```
+
+## Length of vacancy by district
+
+```{r}
+length_table = df %>% as.data.frame() %>% 
+  count(`Commercial District`, `Length of Vacancy`, name='Count', sort=TRUE) %>% 
+  pivot_wider(names_from=`Length of Vacancy`, 
+              values_from=Count, values_fill=list(Count=0)) %>% 
+  select(`Commercial District`, levels(df$`Length of Vacancy`))
+length_table$Total=rowSums(length_table[-1])
+length_table = length_table %>% 
+  arrange(desc(Total))
+
+gt(length_table) %>% 
+  grand_summary_rows(columns=2:6, fns=list(Total=~round(sum(.), 0)))
+
+# district_icons =  awesomeIcons(
+#   icon = 'store-alt',
+#   iconColor = 'black',
+#   library = 'fa',
+#   markerColor = getColor(df.20)
+# )
+# 
+# leaflet(
+#   #width='1000px', height='1000px',
+#         options=leafletOptions(maxZoom=20)) %>% 
+#   # addProviderTiles('CartoDB.Positron', group='Map') %>% 
+#   # addProviderTiles('Esri.WorldImagery', group='Satellite') %>% 
+#  addTiles("http://tiles.mapc.org/basemap/{z}/{x}/{y}.png",
+#           attribution='Map tiles by <a href="http://mapc.org">MAPC</a>, Data by <a href="http://www.mass.gov/mgis/">MassGIS</a>.') %>% 
+#   setView(-71.128184, 42.3769824, zoom = 14) %>% 
+#   addAwesomeMarkers(data=df, group='District')
+```
+
+## Commercial districts
+
+This map shows commercial districts as defined by Cambridge CDD.
+
+```{r map}
+dists = st_read(here::here('COD/ASSESSING_CommercialDistrictsFY2020.gdb.zip'),
+                quiet=TRUE)
+ggplot(dists) +
+  geom_sf(fill='cadetblue2') +
+  geom_sf_text(data=st_centroid(dists), aes(label=DIST_NAME), color='black',
+               size=3) +
+  guides(fill='none') +
+  theme_void()
+```
+
+# Sources
+
+- Vacancy data from [Cambridge Open Data](https://data.cambridgema.gov/Economic-Development/Retail-Vacant-Storefronts-April-2020/exmr-dxma)
+- Map data from [Cambridge GIS](http://gis.cambridgema.gov)
