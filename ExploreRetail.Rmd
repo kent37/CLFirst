@@ -1,0 +1,112 @@
+---
+title: "Cambridge retail business by district"
+author: ""
+date: '`r Sys.Date()`'
+output: kjutil::small_format
+---
+
+```{r parameters, echo=FALSE,include=FALSE,message=FALSE}
+knitr::opts_chunk$set(echo=FALSE,fig.width=10, fig.height=8, comment=NA, warning=FALSE, message=FALSE)
+```
+
+Location of retail businesses in Cambridge.
+
+This report shows 
+[Businesses Open/Closed in Cambridge](https://app.smartsheet.com/b/publish?EQBCT=1ee01731e6654ed68cd4c083de72b707)
+which have a street address in the linked document.
+
+```{r init}
+library(tidyverse)
+library(gt)
+library(leaflet)
+library(sf)
+library(readxl)
+```
+```{r data}
+biz = read_csv(here::here('data/business_open_closed.csv'), 
+               col_types=cols()) %>% 
+          filter(!is.na(Latitude)) %>% 
+  st_as_sf(coords=c('Longitude', 'Latitude'), crs=4326)
+          
+bus_dist = st_read(here::here('COD/ASSESSING_CommercialDistrictsFY2020.gdb.zip'),
+                   stringsAsFactors=FALSE, quiet=TRUE) %>% 
+  st_transform(crs=4326)
+
+nbhd = st_read(here::here('COD/BOUNDARY_CDDNeighborhoods.gdb.zip'),
+               stringsAsFactors=FALSE, quiet=TRUE) %>% 
+  st_transform(crs=4326)
+st_geometry(nbhd) = st_cast(st_geometry(nbhd), 'MULTIPOLYGON')
+```
+
+```{r map}
+bus_dist_colors = colorFactor('Paired', bus_dist$DIST_NAME)
+nbhd_colors = colorFactor(c(RColorBrewer::brewer.pal(12, 'Paired'), 'gray'),
+                          nbhd$NAME)
+
+leaflet(width='900px', height='900px',
+        options=leafletOptions(maxZoom=20)) %>%
+  # addProviderTiles('CartoDB.Positron', group='Map') %>%
+  # addProviderTiles('Esri.WorldImagery', group='Satellite') %>%
+ addTiles("http://tiles.mapc.org/basemap/{z}/{x}/{y}.png",
+          attribution='Map tiles by <a href="http://mapc.org">MAPC</a>, Data by <a href="http://www.mass.gov/mgis/">MassGIS</a>.') %>%
+  setView(-71.128184, 42.3769824, zoom = 14) %>% 
+  addPolygons(data=bus_dist, color='grey', fillColor=~bus_dist_colors(DIST_NAME), 
+              group='Business district', label=~DIST_NAME,
+              weight=1, opacity=0.7, fillOpacity=0.1) %>% 
+  addCircleMarkers(data=biz, label=~`Business Name`,
+                   fillColor=~bus_dist_colors(DIST_NAME), fillOpacity=0.7,
+                   group='Business district', radius=6, stroke=FALSE) %>% 
+  addPolygons(data=nbhd, color='grey', fillColor=~nbhd_colors(NAME), 
+              group='Neighborhood', label=~NAME,
+              weight=1, opacity=0.7, fillOpacity=0.1) %>% 
+  addCircleMarkers(data=biz, label=~`Business Name`,
+                   fillColor=~nbhd_colors(NAME), fillOpacity=0.7,
+                   group='Neighborhood', radius=6, stroke=FALSE) %>% 
+  addLayersControl(baseGroups=c('Business district', 'Neighborhood'),
+                   options=layersControlOptions(collapsed=FALSE)) %>% 
+  hideGroup('Neighborhood')
+```
+
+## Summary tables
+
+```{r tables}
+df = biz %>% 
+  st_drop_geometry() %>% 
+  rename(`Business District`='DIST_NAME', Open='Business Open or Closed?') %>% 
+  filter(!is.na(Open)) %>% 
+  count(`Business District`, Open) %>% 
+  pivot_wider(names_from=Open, values_from=n) %>% 
+  mutate(Total=Closed + Open) %>% 
+  arrange(desc(Total))
+
+gt(df) %>%
+  grand_summary_rows(columns = 2:4, fns = list(Total='sum'), decimals=0) %>% 
+  tab_header('Open and closed businesses by business district')
+
+df = biz %>% 
+  st_drop_geometry() %>% 
+  rename(Neighborhood='NAME', Open='Business Open or Closed?') %>% 
+  filter(!is.na(Open)) %>% 
+  count(Neighborhood, Open) %>% 
+  pivot_wider(names_from=Open, values_from=n, values_fill=list(n=0)) %>% 
+  mutate(Total=Closed + Open) %>% 
+  arrange(desc(Total))
+
+gt(df) %>%
+  grand_summary_rows(columns = 2:4, fns = list(Total='sum'), decimals=0) %>% 
+  tab_header('Open and closed businesses by neighborhood')
+
+```
+
+## Sources
+
+- List of retail businesses from 
+  [Businesses Open/Closed in Cambridge](https://app.smartsheet.com/b/publish?EQBCT=1ee01731e6654ed68cd4c083de72b707)
+- Neighborhood and commercial district boundaries from 
+  [Cambridge GIS](http://gis.cambridgema.gov)
+
+<small>Copyright `r format(Sys.Date(), '%Y')` Kent S Johnson
+<a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">
+  <img alt="Creative Commons License" style="border-width:0;vertical-align:middle;display:inline" 
+  src="https://i.creativecommons.org/l/by-nc-sa/4.0/80x15.png" target="_blank"/></a>
+  <span style='float:right;font-style: italic;'>`r Sys.Date()`</span></small>
