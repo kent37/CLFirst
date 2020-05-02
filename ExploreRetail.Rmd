@@ -67,19 +67,29 @@ leaflet(width='900px', height='900px',
   hideGroup('Neighborhood')
 ```
 
-## Summary tables
+## Summary
 
 ```{r tables}
 df = biz %>% 
   st_drop_geometry() %>% 
   rename(`Business District`='DIST_NAME', Open='Business Open or Closed?') %>% 
   filter(!is.na(Open)) %>% 
-  count(`Business District`, Open) %>% 
+  count(`Business District`, Open)
+
+ggplot(df, aes(forcats::fct_reorder(`Business District`, n, .desc=FALSE), n)) +
+  geom_col(aes(fill=Open)) +
+  coord_flip() +
+  labs(x='', y='Number of businesses',
+       title='Open and closed businesses by business district') +
+  scale_fill_manual('', values=c(Open='#1b9e77',Closed='#d95f02')) +
+  silgelib::theme_plex() +
+  theme(panel.grid=element_blank())
+
+df %>% 
   pivot_wider(names_from=Open, values_from=n) %>% 
   mutate(Total=Closed + Open) %>% 
-  arrange(desc(Total))
-
-gt(df) %>%
+  arrange(desc(Total)) %>% 
+gt() %>%
   grand_summary_rows(columns = 2:4, fns = list(Total='sum'), decimals=0) %>% 
   tab_header('Open and closed businesses by business district')
 
@@ -87,12 +97,22 @@ df = biz %>%
   st_drop_geometry() %>% 
   rename(Neighborhood='NAME', Open='Business Open or Closed?') %>% 
   filter(!is.na(Open)) %>% 
-  count(Neighborhood, Open) %>% 
+  count(Neighborhood, Open)
+
+ggplot(df, aes(forcats::fct_reorder(Neighborhood, n, .desc=FALSE), n)) +
+  geom_col(aes(fill=Open)) +
+  coord_flip() +
+  labs(x='', y='Number of businesses',
+       title='Open and closed businesses by neighborhood') +
+  scale_fill_manual('', values=c(Open='#1b9e77',Closed='#d95f02')) +
+  silgelib::theme_plex() +
+  theme(panel.grid=element_blank())
+
+df %>% 
   pivot_wider(names_from=Open, values_from=n, values_fill=list(n=0)) %>% 
   mutate(Total=Closed + Open) %>% 
-  arrange(desc(Total))
-
-gt(df) %>%
+  arrange(desc(Total)) %>% 
+gt() %>%
   grand_summary_rows(columns = 2:4, fns = list(Total='sum'), decimals=0) %>% 
   tab_header('Open and closed businesses by neighborhood')
 
