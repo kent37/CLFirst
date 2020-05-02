@@ -1,7 +1,9 @@
 # Geocode Businesses_Open_Closed
 
 library(tidyverse)
+library(mapview)
 library(readxl)
+library(sf)
 
 source_path = here::here('data/Businesses Open_Closed in Cambridge.xlsx')
 df = read_xlsx(source_path)
@@ -55,4 +57,39 @@ mapview(geocoded %>%
           st_as_sf(coords=c('Longitude', 'Latitude'), crs=4326), 
         zcol='Business Name', legend=FALSE)
 
+geocoded = read_csv(here::here('data/business_open_closed.csv'))
+
+# Find business district, etc for the geocoded addresses
+bus_dist = st_read(here::here('COD/ASSESSING_CommercialDistrictsFY2020.gdb.zip'),
+                   stringsAsFactors=FALSE)
+
+# st_as_sf fails with NA values so just work with the valid geocodes
+to_locate = geocoded %>% 
+          filter(!is.na(Latitude)) %>% 
+  st_as_sf(coords=c('Longitude', 'Latitude'), crs=4326) %>% 
+  st_transform(crs=2249)
+
+by_dist = to_locate %>% 
+  st_join(bus_dist %>% select(DIST_NAME, DISTRICT))
+by_dist %>% 
+  mapview(zcol='DIST_NAME')
+
+# Neighborhood
+nbhd = st_read('/Users/kent/Dev/FPRA/Cambridge Open Data/Shapefiles/BOUNDARY_CDDNeighborhoods.shp/BOUNDARY_CDDNeighborhoods.shp', stringsAsFactors=FALSE) %>% 
+  select(N_HOOD, NAME)
+
+by_dist = by_dist %>% st_join(nbhd)
+by_dist %>% 
+  mapview(zcol='NAME')
+
+census = st_read(here::here('COD/DEMOGRAPHICS_Tracts2010.gdb.zip'), 
+                 stringsAsFactors=FALSE) %>% 
+  select(GEOID10)
+by_dist = by_dist %>% st_join(census)
+mapview(by_dist, zcol='GEOID10') + mapview(census)
+
+# Join with the full geocoded data
+geocoded = geocoded %>% left_join(by_dist %>% st_drop_geometry())
 write_csv(geocoded, here::here('data/business_open_closed.csv'))
+
+
